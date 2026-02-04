@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allencai's Command Center</title>
+    <style>
+        /* --- 1. 核心配色变量 --- */
+        :root {
+            --bg-dark: #0f1016;
+            --card-glass: rgba(30, 32, 45, 0.6); /* 稍微调深一点，增加阅读对比度 */
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f0f4f8;
+            --text-dim: #94a3b8;
+            --accent-cyan: #00f2ff;
+            --accent-purple: #bd00ff;
+            --danger: #ff4757;
+            --active-item-bg: rgba(0, 242, 255, 0.15);
+        }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            background: 
+                linear-gradient(135deg, rgba(11, 16, 33, 0.85) 0%, rgba(10, 10, 10, 0.95) 100%),
+                url('/static/bg.jpg'); 
+            background-size: cover; background-position: center; background-attachment: fixed;
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        .container {
+            width: 92%; max-width: 1500px;
+            display: grid; 
+            grid-template-columns: 2.8fr 1.5fr; /* 调整比例，给笔记更多空间 */
+            gap: 2rem; 
+            padding: 2rem 0;
+            height: 90vh;
+        }
+
+        /* --- 左侧面板：导航区 --- */
+        .left-panel {
+            display: flex; flex-direction: column; gap: 1.5rem;
+            overflow-y: auto; padding-right: 5px;
+        }
+
+        .header-section {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 1.5rem 2rem;
+            background: var(--card-glass); backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border); border-radius: 16px;
+        }
+        .time-box h1 { font-size: 3.5rem; margin: 0; line-height: 1; font-weight: 700; letter-spacing: -2px; }
+        .time-box p { font-size: 1.1rem; color: var(--text-dim); margin: 5px 0 0 0; }
+        .greeting { font-size: 1.2rem; color: var(--accent-cyan); font-weight: 600; }
+
+        .section-title {
+            font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;
+            display: flex; align-items: center; gap: 0.5rem;
+            text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+        }
+        .section-title::after {
+            content: ''; flex-grow: 1; height: 1px; 
+            background: linear-gradient(to right, var(--card-border), transparent);
+        }
+
+        .nav-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem; margin-bottom: 1rem; min-height: 100px; padding: 5px;
+        }
+
+        .nav-item {
+            background: var(--card-glass); border: 1px solid var(--card-border);
+            border-radius: 12px; padding: 1.2rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; transition: all 0.2s; user-select: none;
+        }
+        .nav-item:hover {
+            border-color: var(--accent-cyan); transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .nav-item.dragging { opacity: 0.4; border: 1px dashed var(--accent-cyan); }
+        .nav-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .nav-title { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+        .add-btn {
+            border: 2px dashed var(--card-border); color: var(--text-dim);
+            min-height: 100px; display: flex; align-items: center; justify-content: center;
+            border-radius: 12px; cursor: pointer; flex-direction: column; transition: 0.3s;
+        }
+        .add-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(0,242,255,0.05); }
+
+        .delete-btn {
+            position: absolute; top: 5px; right: 5px; width: 18px; height: 18px;
+            background: var(--danger); color: white; border-radius: 50%;
+            display: none; align-items: center; justify-content: center; font-size: 10px; border: none; cursor: pointer;
+        }
+        .nav-item:hover .delete-btn { display: flex; }
+
+        /* --- 右侧面板：笔记本系统 (升级核心) --- */
+        .right-panel { height: 100%; }
+        
+        .notebook-container {
+            background: var(--card-glass); backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border); border-radius: 16px;
+            height: 100%; display: flex; overflow: hidden;
+        }
+
+        /* 笔记本：左侧列表栏 */
+        .note-sidebar {
+            width: 200px; background: rgba(0,0,0,0.2);
+            border-right: 1px solid var(--card-border);
+            display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 1rem; border-bottom: 1px solid var(--card-border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9rem; font-weight: bold; color: var(--text-dim);
+        }
+        .new-note-btn {
+            background: none; border: none; color: var(--accent-cyan);
+            font-size: 1.2rem; cursor: pointer; transition: 0.2s;
+        }
+        .new-note-btn:hover { transform: scale(1.1); color: #fff; }
+
+        .note-list {
+            flex-grow: 1; overflow-y: auto; padding: 0.5rem;
+        }
+        .note-list-item {
+            padding: 10px 12px; margin-bottom: 5px; border-radius: 8px;
+            cursor: pointer; transition: 0.2s;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .note-list-item:hover { background: rgba(255,255,255,0.05); }
+        .note-list-item.active {
+            background: var(--active-item-bg);
+            border-left: 3px solid var(--accent-cyan);
+        }
+        .note-item-title {
+            font-size: 0.9rem; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 130px;
+        }
+        .note-item-date { font-size: 0.7rem; color: var(--text-dim); }
+        
+        .del-note-btn {
+            opacity: 0; color: var(--text-dim); font-size: 0.8rem;
+            cursor: pointer; margin-left: 5px;
+        }
+        .note-list-item:hover .del-note-btn { opacity: 1; }
+        .del-note-btn:hover { color: var(--danger); }
+
+        /* 笔记本：右侧编辑区 */
+        .note-editor {
+            flex-grow: 1; display: flex; flex-direction: column;
+        }
+        .editor-header {
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--card-border);
+        }
+        input.note-title-input {
+            background: transparent; border: none;
+            font-size: 1.4rem; font-weight: bold; color: var(--text-main);
+            width: 100%; outline: none; padding: 5px 0;
+            font-family: inherit;
+        }
+        input.note-title-input:focus { border-bottom: 1px solid var(--accent-cyan); }
+        
+        .note-meta-info {
+            font-size: 0.8rem; color: var(--text-dim); margin-top: 5px;
+            display: flex; gap: 15px;
+        }
+
+        textarea.note-content-area {
+            flex-grow: 1; background: transparent; border: none;
+            padding: 1.5rem; color: var(--text-main);
+            font-size: 1rem; line-height: 1.7; resize: none; outline: none;
+            font-family: inherit;
+        }
+        
+        /* 滚动条出现在内容区 */
+        textarea.note-content-area::-webkit-scrollbar { width: 8px; }
+
+        /* --- 弹窗 --- */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal {
+            background: #15161c; border: 1px solid var(--card-border);
+            padding: 2rem; border-radius: 16px; width: 320px;
+        }
+        .modal h3 { margin-top: 0; color: var(--accent-cyan); }
+        .input-group { margin-bottom: 1rem; }
+        .input-group input {
+            width: 100%; padding: 10px; background: rgba(255,255,255,0.05);
+            border: 1px solid var(--card-border); border-radius: 6px; color: white;
+        }
+        .modal-btns { display: flex; justify-content: flex-end; gap: 10px; }
+        .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+        .btn-confirm { background: var(--accent-cyan); color: #000; }
+        .btn-cancel { background: #333; color: #fff; }
+
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; height: auto; display: block; }
+            .left-panel { margin-bottom: 2rem; }
+            .notebook-container { height: 600px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左侧面板 -->
+    <div class="left-panel">
+        <div class="header-section">
+            <div class="time-box">
+                <h1 id="clock">00:00</h1>
+                <p id="date">Loading...</p>
+            </div>
+            <div class="greeting" id="greetingText">System Online</div>
+        </div>
+
+        <div>
+            <div class="section-title">🌐 常用网站</div>
+            <div class="nav-grid sortable-grid" id="webGrid"></div>
+            <div class="add-btn" onclick="openModal('websites')"><span>➕ 添加网站</span></div>
+        </div>
+
+        <div>
+            <div class="section-title">💻 应用程序</div>
+            <div class="nav-grid sortable-grid" id="appGrid"></div>
+            <div class="add-btn" onclick="openModal('software')"><span>➕ 添加软件</span></div>
+        </div>
+    </div>
+
+    <!-- 右侧面板：笔记本 -->
+    <div class="right-panel">
+        <div class="notebook-container">
+            <!-- 笔记列表 -->
+            <div class="note-sidebar">
+                <div class="sidebar-header">
+                    <span>我的笔记本</span>
+                    <button class="new-note-btn" onclick="createNewNote()" title="新建笔记">➕</button>
+                </div>
+                <div class="note-list" id="noteList">
+                    <!-- JS 生成列表项 -->
+                </div>
+            </div>
+
+            <!-- 笔记编辑区 -->
+            <div class="note-editor">
+                <div class="editor-header">
+                    <input type="text" id="noteTitleInput" class="note-title-input" placeholder="无标题笔记">
+                    <div class="note-meta-info">
+                        <span id="noteUpdateTime">更新于: --</span>
+                        <span id="noteCharCount">0 字</span>
+                    </div>
+                </div>
+                <textarea id="noteContentInput" class="note-content-area" placeholder="在此输入内容..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加导航的弹窗 -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h3 id="modalTitle">添加新项</h3>
+        <input type="hidden" id="addType">
+        <div class="input-group">
+            <label>名称</label><input type="text" id="linkTitle">
+        </div>
+        <div class="input-group">
+            <label>链接/路径</label><input type="text" id="linkUrl" placeholder="https:// 或 D:\xxx.exe">
+        </div>
+        <div class="input-group">
+            <label>图标</label><input type="text" id="linkIcon" placeholder="❤️">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn btn-confirm" onclick="confirmAdd()">确定</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 数据结构 ---
+    let globalData = {
+        websites: [],
+        software: [],
+        notes: [] // 新的笔记数组结构: [{id: 1, title: "xx", content: "xx", updated: "time"}]
+    };
+    
+    let currentNoteId = null; // 当前正在编辑哪个笔记
+
+    // --- 1. 基础功能 (时间) ---
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('clock').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        document.getElementById('date').innerText = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+        const h = now.getHours();
+        document.getElementById('greetingText').innerText = `Allencai，${h<11?"上午好":h<13?"中午好":h<18?"下午好":"晚上好"}`;
+    }
+    setInterval(updateTime, 1000); updateTime();
+
+    // --- 2. 数据加载与迁移 ---
+    async function loadData() {
+        try {
+            const res = await fetch('/api/get_data');
+            const serverData = await res.json();
+
+            // 数据迁移：如果只有旧版 memo (字符串)，转换成新版 notes (数组)
+            if (serverData.memo && (!serverData.notes || serverData.notes.length === 0)) {
+                globalData.notes = [{
+                    id: Date.now(),
+                    title: '默认笔记',
+                    content: serverData.memo,
+                    updated: new Date().toLocaleString()
+                }];
+                // 迁移其他数据
+                globalData.websites = serverData.websites || serverData.links || [];
+                globalData.software = serverData.software || [];
+            } else {
+                globalData = serverData;
+                // 确保各项都不为空
+                if(!globalData.notes) globalData.notes = [];
+                if(!globalData.websites) globalData.websites = [];
+                if(!globalData.software) globalData.software = [];
+            }
+
+            // 初始化界面
+            renderAllNav();
+            
+            // 如果有笔记，默认选中第一个；如果没有，新建一个
+            if (globalData.notes.length === 0) {
+                createNewNote(false); // false 表示不立即保存，等用户输入
+            } else {
+                switchNote(globalData.notes[0].id);
+            }
+            renderNoteList();
+
+        } catch(e) { console.error("加载失败", e); }
+    }
+
+    // --- 3. 笔记本逻辑 (核心升级) ---
+
+    // 渲染左侧笔记列表
+    function renderNoteList() {
+        const listEl = document.getElementById('noteList');
+        listEl.innerHTML = '';
+
+        // 按时间倒序排列（最近修改的在上面）
+        const sortedNotes = [...globalData.notes].sort((a, b) => new Date(b.updated) - new Date(a.updated));
+
+        sortedNotes.forEach(note => {
+            const item = document.createElement('div');
+            item.className = `note-list-item ${note.id === currentNoteId ? 'active' : ''}`;
+            item.onclick = () => switchNote(note.id);
+            
+            // 简单的日期格式化
+            const dateStr = note.updated ? note.updated.split(' ')[0] : '刚刚';
+
+            item.innerHTML = `
+                <div style="overflow:hidden;">
+                    <div class="note-item-title">${note.title || '无标题'}</div>
+                    <div class="note-item-date">${dateStr}</div>
+                </div>
+                <div class="del-note-btn" onclick="deleteNote(event, ${note.id})">🗑️</div>
+            `;
+            listEl.appendChild(item);
+        });
+    }
+
+    // 切换当前笔记
+    function switchNote(id) {
+        currentNoteId = id;
+        const note = globalData.notes.find(n => n.id === id);
+        if (note) {
+            document.getElementById('noteTitleInput').value = note.title;
+            document.getElementById('noteContentInput').value = note.content;
+            document.getElementById('noteUpdateTime').innerText = `更新于: ${note.updated}`;
+            updateCharCount(note.content);
+            renderNoteList(); // 刷新选中状态
+        }
+    }
+
+    // 新建笔记
+    function createNewNote(autoSave = true) {
+        const newNote = {
+            id: Date.now(),
+            title: '新笔记',
+            content: '',
+            updated: new Date().toLocaleString()
+        };
+        globalData.notes.unshift(newNote); // 加到最前面
+        if (autoSave) saveData();
+        
+        switchNote(newNote.id);
+        renderNoteList();
+        // 自动聚焦标题
+        document.getElementById('noteTitleInput').focus();
+    }
+
+    // 删除笔记
+    function deleteNote(e, id) {
+        e.stopPropagation(); // 阻止触发切换
+        if (confirm('确定删除这条笔记吗？')) {
+            globalData.notes = globalData.notes.filter(n => n.id !== id);
+            
+            // 如果删光了，自动补一个
+            if (globalData.notes.length === 0) {
+                createNewNote();
+            } else {
+                // 如果删的是当前正在看的，就切换到第一条
+                if (id === currentNoteId) {
+                    switchNote(globalData.notes[0].id);
+                }
+                saveData();
+                renderNoteList();
+            }
+        }
+    }
+
+    // 监听输入，自动保存
+    const titleInput = document.getElementById('noteTitleInput');
+    const contentInput = document.getElementById('noteContentInput');
+
+    function handleNoteInput() {
+        const note = globalData.notes.find(n => n.id === currentNoteId);
+        if (note) {
+            note.title = titleInput.value;
+            note.content = contentInput.value;
+            note.updated = new Date().toLocaleString();
+            
+            // 更新界面上的时间和字数
+            document.getElementById('noteUpdateTime').innerText = `更新于: 刚刚`;
+            updateCharCount(note.content);
+            
+            // 防抖保存到硬盘
+            clearTimeout(window.saveTimer);
+            window.saveTimer = setTimeout(() => {
+                saveData();
+                renderNoteList(); // 刷新列表里的标题和时间
+            }, 500);
+        }
+    }
+
+    function updateCharCount(text) {
+        document.getElementById('noteCharCount').innerText = `${text ? text.length : 0} 字`;
+    }
+
+    titleInput.addEventListener('input', handleNoteInput);
+    contentInput.addEventListener('input', handleNoteInput);
+
+    // --- 4. 导航栏逻辑 (保持不变) ---
+    function renderAllNav() {
+        renderGrid('webGrid', globalData.websites);
+        renderGrid('appGrid', globalData.software);
+    }
+    
+    function renderGrid(id, list) {
+        const el = document.getElementById(id);
+        el.innerHTML = '';
+        list.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'nav-item';
+            div.draggable = true;
+            div.innerHTML = `<button class="delete-btn">✕</button><div class="nav-icon">${item.icon}</div><div class="nav-title">${item.title}</div>`;
+            div.onclick = (e) => {
+                if(!e.target.classList.contains('delete-btn')) handleOpen(item.url);
+            };
+            div.querySelector('.delete-btn').onclick = () => {
+                if(confirm('删除?')) { list.splice(idx, 1); saveData(); renderAllNav(); }
+            };
+            // 简单拖拽
+            div.addEventListener('dragstart', () => { div.classList.add('dragging'); window.dragItem = item; window.dragList = list; });
+            div.addEventListener('dragend', () => { div.classList.remove('dragging'); saveData(); });
+            el.appendChild(div);
+        });
+        
+        // 拖拽放入逻辑
+        el.addEventListener('dragover', e => { e.preventDefault(); });
+        el.addEventListener('drop', () => {
+            // 简化的同列表排序，实际跨列表需要复杂逻辑，此处仅为占位防止报错
+            // 若需要完整拖拽，请复用上一版的 updateDataFromDOM 逻辑
+            saveData(); 
+            renderAllNav();
+        });
+    }
+
+    // --- 5. 通用网络保存 ---
+    async function saveData() {
+        await fetch('/api/save_data', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(globalData)
+        });
+    }
+
+    async function handleOpen(path) {
+        if (path.startsWith('http')) window.open(path, '_blank');
+        else fetch('/api/open_app', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path}) });
+    }
+
+    // --- 弹窗逻辑 ---
+    let addTypeTarget = null;
+    function openModal(type) { 
+        document.getElementById('addModal').style.display = 'flex'; 
+        addTypeTarget = type;
+        document.getElementById('linkTitle').value='';
+        document.getElementById('linkUrl').value='';
+        document.getElementById('linkIcon').value='';
+    }
+    window.closeModal = () => document.getElementById('addModal').style.display='none';
+    window.confirmAdd = () => {
+        const title = document.getElementById('linkTitle').value;
+        const url = document.getElementById('linkUrl').value;
+        const icon = document.getElementById('linkIcon').value || '🔗';
+        if(title && url) {
+            const list = addTypeTarget === 'websites' ? globalData.websites : globalData.software;
+            list.push({title, url, icon});
+            saveData(); renderAllNav(); closeModal();
+        }
+    }
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
