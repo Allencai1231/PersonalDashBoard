@@ -695,6 +695,9 @@
             const response = await fetch('/api/get_music_playlists');
             playlists = await response.json();
             
+            // 渲染播放列表选择器
+            renderPlaylistSelector();
+            
             // 始终显示音乐图标
             document.getElementById('musicIcon').style.display = 'flex';
             
