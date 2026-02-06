@@ -1,16 +1,56 @@
 import os
 import json
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from functools import wraps
 
 app = Flask(__name__)
+# 设置密钥用于会话加密
+app.secret_key = 'your-secret-key-here-please-change-in-production'
 DATA_FILE = 'data.json'
 
+# 验证账号密码
+VALID_USERNAME = "AllenCai1231"
+VALID_PASSWORD = "Allen20080813"
+
+def login_required(f):
+    """装饰器：检查用户是否已登录"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """登录页面和处理"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username == VALID_USERNAME and password == VALID_PASSWORD:
+            session['logged_in'] = True
+            session['username'] = username
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "message": "账号或密码错误"}), 401
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """退出登录"""
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     # 这一步对应日志里的 "GET /"
     return render_template('index.html')
 
 @app.route('/api/get_data', methods=['GET'])
+@login_required
 def get_data():
     # 这一步是前端JS加载后应该调用的，日志里缺这个说明JS没跑起来
     if not os.path.exists(DATA_FILE):
@@ -26,6 +66,7 @@ def get_data():
         return jsonify({"memo": "", "links": []})
 
 @app.route('/api/save_data', methods=['POST'])
+@login_required
 def save_data():
     data = request.json
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -33,6 +74,7 @@ def save_data():
     return jsonify({"status": "success"})
 
 @app.route('/api/open_app', methods=['POST'])
+@login_required
 def open_app():
     target = request.json.get('path')
     if not target:
@@ -45,6 +87,7 @@ def open_app():
 
 # 音乐播放器相关API
 @app.route('/api/get_music_playlists', methods=['GET'])
+@login_required
 def get_music_playlists():
     """获取所有播放列表（Music目录下的子目录）"""
     music_dir = os.path.join(os.getcwd(), 'Music')
@@ -77,6 +120,7 @@ def get_music_playlists():
     return jsonify(playlists)
 
 @app.route('/music/<path:relative_path>')
+@login_required
 def serve_music(relative_path):
     """提供音乐文件服务"""
     # 从相对路径构建完整路径
