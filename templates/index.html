@@ -473,6 +473,20 @@
         .btn-confirm { background: var(--accent-cyan); color: #000; }
         .btn-cancel { background: #333; color: #fff; }
 
+        /* 权限提示 */
+        .permission-warning {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 71, 87, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            display: none;
+        }
+
         @media (max-width: 900px) {
             .container { grid-template-columns: 1fr; height: auto; display: block; }
             .left-panel { margin-bottom: 2rem; }
@@ -595,6 +609,9 @@
     <i>🎵</i>
 </div>
 
+<!-- 权限警告提示 -->
+<div class="permission-warning" id="permissionWarning">您没有编辑权限，仅可查看内容</div>
+
 <!-- 添加导航的弹窗 -->
 <div class="modal-overlay" id="addModal">
     <div class="modal">
@@ -639,6 +656,7 @@
     };
     
     let currentNoteId = null; // 当前正在编辑哪个笔记
+    let userRole = 'user'; // 默认为普通用户
 
     // --- 1. 基础功能 (时间) ---
     function updateTime() {
@@ -686,6 +704,9 @@
             }
             renderNoteList();
 
+            // 检查用户权限并设置界面
+            checkUserPermissions();
+
         } catch(e) { console.error("加载失败", e); }
     }
 
@@ -710,6 +731,94 @@
         } catch (error) {
             console.error("加载音乐播放列表失败:", error);
         }
+    }
+    
+    // --- 检查用户权限 ---
+    async function checkUserPermissions() {
+        try {
+            // 获取当前用户信息
+            const response = await fetch('/api/get_user_info');
+            if (response.ok) {
+                const userInfo = await response.json();
+                userRole = userInfo.role || 'user';
+                
+                // 根据角色设置界面权限
+                setInterfacePermissions();
+            } else {
+                // 如果无法获取用户信息，假设为普通用户
+                userRole = 'user';
+                setInterfacePermissions();
+            }
+        } catch (error) {
+            console.error('获取用户信息失败:', error);
+            userRole = 'user';
+            setInterfacePermissions();
+        }
+    }
+
+    // --- 设置界面权限 ---
+    function setInterfacePermissions() {
+        if (userRole === 'admin') {
+            // 管理员拥有全部权限
+            enableAllFeatures();
+            document.getElementById('permissionWarning').style.display = 'none';
+        } else {
+            // 普通用户只有查看权限
+            disableEditingFeatures();
+            document.getElementById('permissionWarning').style.display = 'block';
+        }
+    }
+
+    // --- 启用所有功能（管理员）---
+    function enableAllFeatures() {
+        // 启用添加按钮
+        document.querySelectorAll('.add-btn').forEach(btn => {
+            btn.style.pointerEvents = 'auto';
+            btn.style.opacity = '1';
+        });
+        
+        // 启用编辑区域
+        document.getElementById('noteTitleInput').readOnly = false;
+        document.getElementById('noteContentInput').readOnly = false;
+        document.querySelector('.new-note-btn').style.pointerEvents = 'auto';
+        
+        // 启用删除按钮（通过CSS控制）
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .nav-item:hover .delete-btn { display: flex !important; }
+            .note-list-item:hover .del-note-btn { opacity: 1 !important; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // --- 禁用编辑功能（普通用户）---
+    function disableEditingFeatures() {
+        // 禁用添加按钮
+        document.querySelectorAll('.add-btn').forEach(btn => {
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.5';
+        });
+        
+        // 禁用编辑区域
+        document.getElementById('noteTitleInput').readOnly = true;
+        document.getElementById('noteContentInput').readOnly = true;
+        document.querySelector('.new-note-btn').style.pointerEvents = 'none';
+        
+        // 隐藏删除按钮
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .delete-btn, .del-note-btn {
+                display: none !important;
+            }
+            .add-btn {
+                cursor: not-allowed !important;
+            }
+            .note-title-input, .note-content-area {
+                background: rgba(255,255,255,0.02) !important;
+                cursor: not-allowed !important;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     function renderPlaylistSelector() {
@@ -985,8 +1094,17 @@
                     <div class="note-item-title">${note.title || '无标题'}</div>
                     <div class="note-item-date">${dateStr}</div>
                 </div>
-                <div class="del-note-btn" onclick="deleteNote(event, ${note.id})">🗑️</div>
             `;
+            
+            // 只有管理员才能看到删除按钮
+            if (userRole === 'admin') {
+                const delBtn = document.createElement('div');
+                delBtn.className = 'del-note-btn';
+                delBtn.textContent = '🗑️';
+                delBtn.onclick = (e) => deleteNote(e, note.id);
+                item.appendChild(delBtn);
+            }
+            
             listEl.appendChild(item);
         });
     }
@@ -1006,6 +1124,11 @@
 
     // 新建笔记
     function createNewNote(autoSave = true) {
+        if (userRole !== 'admin') {
+            showPermissionWarning();
+            return;
+        }
+        
         const newNote = {
             id: Date.now(),
             title: '新笔记',
@@ -1023,6 +1146,11 @@
 
     // 删除笔记
     function deleteNote(e, id) {
+        if (userRole !== 'admin') {
+            showPermissionWarning();
+            return;
+        }
+        
         e.stopPropagation(); // 阻止触发切换
         if (confirm('确定删除这条笔记吗？')) {
             globalData.notes = globalData.notes.filter(n => n.id !== id);
@@ -1041,11 +1169,24 @@
         }
     }
 
+    // 显示权限警告
+    function showPermissionWarning() {
+        const warning = document.getElementById('permissionWarning');
+        warning.style.display = 'block';
+        setTimeout(() => {
+            warning.style.display = 'none';
+        }, 3000);
+    }
+
     // 监听输入，自动保存
     const titleInput = document.getElementById('noteTitleInput');
     const contentInput = document.getElementById('noteContentInput');
 
     function handleNoteInput() {
+        if (userRole !== 'admin') {
+            return; // 普通用户不能编辑
+        }
+        
         const note = globalData.notes.find(n => n.id === currentNoteId);
         if (note) {
             note.title = titleInput.value;
@@ -1084,32 +1225,59 @@
         list.forEach((item, idx) => {
             const div = document.createElement('div');
             div.className = 'nav-item';
-            div.draggable = true;
-            div.innerHTML = `<button class="delete-btn">✕</button><div class="nav-icon">${item.icon}</div><div class="nav-title">${item.title}</div>`;
+            div.draggable = userRole === 'admin'; // 只有管理员可以拖拽
+            div.innerHTML = `<div class="nav-icon">${item.icon}</div><div class="nav-title">${item.title}</div>`;
             div.onclick = (e) => {
-                if(!e.target.classList.contains('delete-btn')) handleOpen(item.url);
+                handleOpen(item.url);
             };
-            div.querySelector('.delete-btn').onclick = () => {
-                if(confirm('删除?')) { list.splice(idx, 1); saveData(); renderAllNav(); }
-            };
-            // 简单拖拽
-            div.addEventListener('dragstart', () => { div.classList.add('dragging'); window.dragItem = item; window.dragList = list; });
-            div.addEventListener('dragend', () => { div.classList.remove('dragging'); saveData(); });
+            
+            // 只有管理员才能看到删除按钮
+            if (userRole === 'admin') {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = '✕';
+                deleteBtn.onclick = () => {
+                    if(confirm('删除?')) { 
+                        list.splice(idx, 1); 
+                        saveData(); 
+                        renderAllNav(); 
+                    }
+                };
+                div.insertBefore(deleteBtn, div.firstChild);
+                
+                // 简单拖拽
+                div.addEventListener('dragstart', () => { 
+                    div.classList.add('dragging'); 
+                    window.dragItem = item; 
+                    window.dragList = list; 
+                });
+                div.addEventListener('dragend', () => { 
+                    div.classList.remove('dragging'); 
+                    saveData(); 
+                });
+            }
+            
             el.appendChild(div);
         });
         
         // 拖拽放入逻辑
-        el.addEventListener('dragover', e => { e.preventDefault(); });
-        el.addEventListener('drop', () => {
-            // 简化的同列表排序，实际跨列表需要复杂逻辑，此处仅为占位防止报错
-            // 若需要完整拖拽，请复用上一版的 updateDataFromDOM 逻辑
-            saveData(); 
-            renderAllNav();
-        });
+        if (userRole === 'admin') {
+            el.addEventListener('dragover', e => { e.preventDefault(); });
+            el.addEventListener('drop', () => {
+                // 简化的同列表排序，实际跨列表需要复杂逻辑，此处仅为占位防止报错
+                // 若需要完整拖拽，请复用上一版的 updateDataFromDOM 逻辑
+                saveData(); 
+                renderAllNav();
+            });
+        }
     }
 
     // --- 5. 通用网络保存 ---
     async function saveData() {
+        if (userRole !== 'admin') {
+            return; // 普通用户不能保存
+        }
+        
         await fetch('/api/save_data', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1118,13 +1286,30 @@
     }
 
     async function handleOpen(path) {
-        if (path.startsWith('http')) window.open(path, '_blank');
-        else fetch('/api/open_app', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path}) });
+        if (path.startsWith('http')) {
+            window.open(path, '_blank');
+        } else {
+            // 只有管理员才能打开本地应用
+            if (userRole === 'admin') {
+                fetch('/api/open_app', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({path}) 
+                });
+            } else {
+                showPermissionWarning();
+            }
+        }
     }
 
     // --- 弹窗逻辑 ---
     let addTypeTarget = null;
     function openModal(type) { 
+        if (userRole !== 'admin') {
+            showPermissionWarning();
+            return;
+        }
+        
         document.getElementById('addModal').style.display = 'flex'; 
         addTypeTarget = type;
         document.getElementById('linkTitle').value='';
@@ -1133,6 +1318,11 @@
     }
     window.closeModal = () => document.getElementById('addModal').style.display='none';
     window.confirmAdd = () => {
+        if (userRole !== 'admin') {
+            showPermissionWarning();
+            return;
+        }
+        
         const title = document.getElementById('linkTitle').value;
         const url = document.getElementById('linkUrl').value;
         const icon = document.getElementById('linkIcon').value || '🔗';

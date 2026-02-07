@@ -8,9 +8,66 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here-please-change-in-production'
 DATA_FILE = 'data.json'
 
-# 验证账号密码
-VALID_USERNAME = "AllenCai1231"
-VALID_PASSWORD = "Allen20080813"
+def load_data():
+    """加载数据文件"""
+    if not os.path.exists(DATA_FILE):
+        # 创建默认数据文件
+        default_data = {
+            "users": [
+                {
+                    "username": "AllenCai1231",
+                    "password": "Allen20080813",
+                    "role": "admin",
+                    "created_at": "2026-02-07"
+                }
+            ],
+            "notes": [],
+            "software": [],
+            "websites": []
+        }
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=4)
+        return default_data
+    
+    try:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {"users": [], "notes": [], "software": [], "websites": []}
+
+def save_data(data):
+    """保存数据到文件"""
+    with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def get_user_by_username(username):
+    """根据用户名获取用户信息"""
+    data = load_data()
+    for user in data.get('users', []):
+        if user['username'] == username:
+            return user
+    return None
+
+def add_user(username, password, role='user'):
+    """添加新用户"""
+    data = load_data()
+    if not data.get('users'):
+        data['users'] = []
+    
+    # 检查用户名是否已存在
+    for user in data['users']:
+        if user['username'] == username:
+            return False
+    
+    new_user = {
+        'username': username,
+        'password': password,
+        'role': role,
+        'created_at': '2026-02-07'
+    }
+    data['users'].append(new_user)
+    save_data(data)
+    return True
 
 def login_required(f):
     """装饰器：检查用户是否已登录"""
@@ -21,6 +78,36 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def admin_required(f):
+    """装饰器：检查用户是否为管理员"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session or session.get('role') != 'admin':
+            return jsonify({"status": "error", "message": "权限不足"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """注册页面和处理"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            return jsonify({"status": "error", "message": "用户名和密码不能为空"}), 400
+        
+        if len(username) < 3 or len(password) < 6:
+            return jsonify({"status": "error", "message": "用户名至少3位，密码至少6位"}), 400
+        
+        # 添加普通用户（非管理员）
+        if add_user(username, password, 'user'):
+            return jsonify({"status": "success", "message": "注册成功，请登录"})
+        else:
+            return jsonify({"status": "error", "message": "用户名已存在"}), 409
+    
+    return render_template('register.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """登录页面和处理"""
@@ -28,10 +115,12 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        if username == VALID_USERNAME and password == VALID_PASSWORD:
+        user = get_user_by_username(username)
+        if user and user['password'] == password:
             session['logged_in'] = True
             session['username'] = username
-            return jsonify({"status": "success"})
+            session['role'] = user['role']
+            return jsonify({"status": "success", "role": user['role']})
         else:
             return jsonify({"status": "error", "message": "账号或密码错误"}), 401
     
@@ -53,28 +142,27 @@ def index():
 @login_required
 def get_data():
     # 这一步是前端JS加载后应该调用的，日志里缺这个说明JS没跑起来
-    if not os.path.exists(DATA_FILE):
-        default_data = {"memo": "", "links": []}
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(default_data, f)
-        return jsonify(default_data)
-    
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return jsonify(json.load(f))
-    except:
-        return jsonify({"memo": "", "links": []})
+    data = load_data()
+    # 移除用户信息，不返回给前端
+    if 'users' in data:
+        del data['users']
+    return jsonify(data)
 
 @app.route('/api/save_data', methods=['POST'])
-@login_required
-def save_data():
+@admin_required
+def save_data_api():
     data = request.json
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    # 加载现有数据并保留用户信息
+    existing_data = load_data()
+    users = existing_data.get('users', [])
+    
+    # 合并数据，保留用户信息
+    data['users'] = users
+    save_data(data)
     return jsonify({"status": "success"})
 
 @app.route('/api/open_app', methods=['POST'])
-@login_required
+@admin_required
 def open_app():
     target = request.json.get('path')
     if not target:
@@ -129,6 +217,15 @@ def serve_music(relative_path):
         return send_file(music_path)
     else:
         return jsonify({'error': 'File not found'}), 404
+
+@app.route('/api/get_user_info', methods=['GET'])
+@login_required
+def get_user_info():
+    """获取当前用户信息"""
+    return jsonify({
+        'username': session.get('username'),
+        'role': session.get('role')
+    })
 
 if __name__ == '__main__':
     print("系统启动成功！")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - Allencai's Command Center</title>
+    <title>注册 - Allencai's Command Center</title>
     <style>
         :root {
             --bg-dark: #0f1016;
@@ -27,7 +27,7 @@
             background-size: cover; background-position: center; background-attachment: fixed;
         }
 
-        .login-container {
+        .register-container {
             background: var(--card-glass);
             backdrop-filter: blur(12px);
             border: 1px solid var(--card-border);
@@ -37,7 +37,7 @@
             text-align: center;
         }
 
-        .login-container h2 {
+        .register-container h2 {
             color: var(--accent-cyan);
             margin-bottom: 1.5rem;
             font-weight: 700;
@@ -70,7 +70,7 @@
             box-shadow: 0 0 0 2px rgba(0, 242, 255, 0.2);
         }
 
-        .login-btn {
+        .register-btn {
             width: 100%;
             padding: 12px;
             background: var(--accent-cyan);
@@ -83,9 +83,24 @@
             transition: all 0.2s;
         }
 
-        .login-btn:hover {
+        .register-btn:hover {
             background: #00d4e6;
             transform: translateY(-2px);
+        }
+
+        .login-link {
+            margin-top: 1rem;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .login-link a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
         }
 
         .error-message {
@@ -97,32 +112,34 @@
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <h2>系统登录</h2>
-        <form id="loginForm" method="POST" action="/login">
+    <div class="register-container">
+        <h2>用户注册</h2>
+        <form id="registerForm" method="POST" action="/register">
             <div class="input-group">
-                <label for="username">账号</label>
-                <input type="text" id="username" name="username" required>
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" required minlength="3">
             </div>
             <div class="input-group">
                 <label for="password">密码</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" required minlength="6">
             </div>
-            <button type="submit" class="login-btn">登录</button>
+            <button type="submit" class="register-btn">注册</button>
             <div class="error-message" id="errorMessage"></div>
-            <div style="margin-top:1rem;color:var(--text-dim);font-size:0.9rem;">还没有账号？<a href="/register" style="color:var(--accent-cyan);text-decoration:none;">立即注册</a></div>
+            <div class="login-link">
+                已有账号？<a href="/login">立即登录</a>
+            </div>
         </form>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('errorMessage');
             
-            fetch('/login', {
+            fetch('/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -134,10 +151,13 @@
             })
             .then(response => {
                 if (response.ok) {
-                    window.location.href = '/';
+                    return response.json().then(data => {
+                        alert(data.message || '注册成功，请登录');
+                        window.location.href = '/login';
+                    });
                 } else {
                     return response.json().then(data => {
-                        throw new Error(data.message || '登录失败');
+                        throw new Error(data.message || '注册失败');
                     });
                 }
             })
