@@ -443,15 +443,22 @@
             display: flex; gap: 15px;
         }
 
-        textarea.note-content-area {
+        .note-content-area {
             flex-grow: 1; background: transparent; border: none;
             padding: 1.5rem; color: var(--text-main);
-            font-size: 1rem; line-height: 1.7; resize: none; outline: none;
-            font-family: inherit;
+            font-size: 1rem; line-height: 1.7; outline: none;
+            font-family: inherit; overflow-y: auto;
         }
-        
+        .note-content-area img { max-width: 100%; cursor: zoom-in; display: block; margin: 8px 0; }
         /* 滚动条出现在内容区 */
-        textarea.note-content-area::-webkit-scrollbar { width: 8px; }
+        .note-content-area::-webkit-scrollbar { width: 8px; }
+
+        /* 图片预览模态 */
+        .image-preview-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none;
+            justify-content: center; align-items: center; z-index: 1200;
+        }
+        .image-preview-overlay img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
 
         /* --- 弹窗 --- */
         .modal-overlay {
@@ -557,7 +564,10 @@
                         <span id="noteCharCount">0 字</span>
                     </div>
                 </div>
-                <textarea id="noteContentInput" class="note-content-area" placeholder="在此输入内容..."></textarea>
+                <div id="noteContentInput" class="note-content-area" contenteditable="true" placeholder="在此输入内容..."></div>
+                <div class="image-preview-overlay" id="imagePreview" onclick="hideImagePreview()">
+                    <img id="imagePreviewImg" src="" alt="preview">
+                </div>
             </div>
         </div>
     </div>
@@ -813,7 +823,8 @@
         
         // 启用编辑区域
         document.getElementById('noteTitleInput').readOnly = false;
-        document.getElementById('noteContentInput').readOnly = false;
+        const contentEl = document.getElementById('noteContentInput');
+        if (contentEl) contentEl.contentEditable = 'true';
         document.querySelector('.new-note-btn').style.pointerEvents = 'auto';
         
         // 启用删除按钮（通过CSS控制）
@@ -835,7 +846,8 @@
         
         // 禁用编辑区域
         document.getElementById('noteTitleInput').readOnly = true;
-        document.getElementById('noteContentInput').readOnly = true;
+        const contentEl = document.getElementById('noteContentInput');
+        if (contentEl) contentEl.contentEditable = 'false';
         document.querySelector('.new-note-btn').style.pointerEvents = 'none';
         
         // 隐藏删除按钮
@@ -1221,7 +1233,7 @@
 
         if (note) {
             document.getElementById('noteTitleInput').value = note.title;
-            document.getElementById('noteContentInput').value = note.content;
+            document.getElementById('noteContentInput').innerHTML = note.content || '';
             document.getElementById('noteUpdateTime').innerText = `更新于: ${note.updated}`;
             updateCharCount(note.content);
             renderNoteList(); // 刷新选中状态
@@ -1334,7 +1346,7 @@
 
         if (note) {
             note.title = titleInput.value;
-            note.content = contentInput.value;
+            note.content = contentInput.innerHTML;
             note.updated = new Date().toLocaleString();
 
             // 更新界面上的时间和字数
@@ -1351,11 +1363,81 @@
     }
 
     function updateCharCount(text) {
-        document.getElementById('noteCharCount').innerText = `${text ? text.length : 0} 字`;
+        let len = 0;
+        if (typeof text === 'string') {
+            // 如果传入 HTML 字符串，去掉标签后计数
+            const tmp = document.createElement('div'); tmp.innerHTML = text;
+            len = tmp.textContent ? tmp.textContent.length : 0;
+        } else {
+            const el = document.getElementById('noteContentInput');
+            len = el ? (el.textContent || '').length : 0;
+        }
+        document.getElementById('noteCharCount').innerText = `${len} 字`;
     }
 
     titleInput.addEventListener('input', handleNoteInput);
     contentInput.addEventListener('input', handleNoteInput);
+    // 支持粘贴图片到笔记（截图或复制图片后 Ctrl+V）
+    contentInput.addEventListener('paste', function(e) {
+        if (userRole !== 'admin') return;
+        const items = (e.clipboardData || window.clipboardData).items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type && item.type.indexOf('image') !== -1) {
+                const blob = item.getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    insertImageAtCursor(ev.target.result);
+                    handleNoteInput();
+                };
+                reader.readAsDataURL(blob);
+                e.preventDefault();
+                return;
+            }
+        }
+    });
+
+    // 点击图片放大（事件委托）
+    contentInput.addEventListener('click', function(e) {
+        const t = e.target;
+        if (t && t.tagName === 'IMG') {
+            showImagePreview(t.src);
+        }
+    });
+
+    function insertImageAtCursor(dataUrl) {
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = 'pasted-image';
+        img.style.maxWidth = '100%';
+
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) {
+            document.getElementById('noteContentInput').appendChild(img);
+            return;
+        }
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        // 将光标移动到图片之后
+        range.setStartAfter(img);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    function showImagePreview(src) {
+        const overlay = document.getElementById('imagePreview');
+        const img = document.getElementById('imagePreviewImg');
+        img.src = src;
+        overlay.style.display = 'flex';
+    }
+
+    function hideImagePreview() {
+        const overlay = document.getElementById('imagePreview');
+        overlay.style.display = 'none';
+        document.getElementById('imagePreviewImg').src = '';
+    }
 
     // --- 4. 导航栏逻辑 (保持不变) ---
     function renderAllNav() {
