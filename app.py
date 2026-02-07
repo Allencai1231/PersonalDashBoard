@@ -15,6 +15,7 @@ def load_data():
         default_data = {
             "users": [],
             "notes": [],
+            "note_categories": [],
             "software": [],
             "websites": []
         }
@@ -26,7 +27,7 @@ def load_data():
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except:
-        return {"users": [], "notes": [], "software": [], "websites": []}
+        return {"users": [], "notes": [], "note_categories": [], "software": [], "websites": []}
 
 def save_data(data):
     """保存数据到文件"""

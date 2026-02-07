@@ -539,6 +539,10 @@
                     <span>我的笔记本</span>
                     <button class="new-note-btn" onclick="createNewNote()" title="新建笔记">➕</button>
                 </div>
+                <div style="padding:0.4rem; border-bottom:1px solid var(--card-border); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div id="categoryList" style="display:flex; gap:8px; overflow:auto;"></div>
+                    <button class="new-note-btn" onclick="createNewCategory()" title="新建分类">📁➕</button>
+                </div>
                 <div class="note-list" id="noteList">
                     <!-- JS 生成列表项 -->
                 </div>
@@ -652,8 +656,10 @@
     let globalData = {
         websites: [],
         software: [],
-        notes: [] // 新的笔记数组结构: [{id: 1, title: "xx", content: "xx", updated: "time"}]
+        notes: [], // 兼容旧结构，仍保留平铺 notes
+        note_categories: [] // 新增：分类结构 [{id, name, notes: [...]}]
     };
+    let currentCategoryId = null; // 当前选中的分类（null 表示未选择，使用平铺 notes）
     
     let currentNoteId = null; // 当前正在编辑哪个笔记
     let userRole = 'user'; // 默认为普通用户
@@ -695,14 +701,42 @@
 
             // 初始化界面
             renderAllNav();
-            
-            // 如果有笔记，默认选中第一个；如果没有，新建一个
-            if (globalData.notes.length === 0) {
-                createNewNote(false); // false 表示不立即保存，等用户输入
-            } else {
-                switchNote(globalData.notes[0].id);
+
+            // 数据迁移：如果存在旧版平铺 notes，但没有分类，则创建一个默认分类并迁移
+            if ((!globalData.note_categories || globalData.note_categories.length === 0) && globalData.notes && globalData.notes.length > 0) {
+                const defaultCat = {
+                    id: Date.now(),
+                    name: '默认',
+                    notes: globalData.notes.slice()
+                };
+                globalData.note_categories = [defaultCat];
+                currentCategoryId = defaultCat.id;
             }
-            renderNoteList();
+
+            // 确保结构存在
+            if(!globalData.note_categories) globalData.note_categories = [];
+            if(!globalData.notes) globalData.notes = [];
+
+            renderCategoryList();
+            // 如果有分类则选中第一个分类并渲染其笔记
+            if (globalData.note_categories.length > 0) {
+                if (!currentCategoryId) currentCategoryId = globalData.note_categories[0].id;
+                renderNoteList();
+                const firstCat = globalData.note_categories.find(c => c.id === currentCategoryId);
+                if (firstCat && firstCat.notes && firstCat.notes.length>0) {
+                    switchNote(firstCat.notes[0].id);
+                } else {
+                    createNewNote(false);
+                }
+            } else {
+                // 兼容：没有分类时按平铺 notes 处理
+                if (globalData.notes.length === 0) {
+                    createNewNote(false);
+                } else {
+                    switchNote(globalData.notes[0].id);
+                }
+                renderNoteList();
+            }
 
             // 检查用户权限并设置界面
             checkUserPermissions();
@@ -1078,14 +1112,23 @@
         const listEl = document.getElementById('noteList');
         listEl.innerHTML = '';
 
+        // 根据当前分类选择要展示的笔记集合
+        let notesToShow = [];
+        if (currentCategoryId) {
+            const cat = globalData.note_categories.find(c => c.id === currentCategoryId);
+            if (cat && cat.notes) notesToShow = cat.notes.slice();
+        } else {
+            notesToShow = globalData.notes.slice();
+        }
+
         // 按时间倒序排列（最近修改的在上面）
-        const sortedNotes = [...globalData.notes].sort((a, b) => new Date(b.updated) - new Date(a.updated));
+        const sortedNotes = notesToShow.sort((a, b) => new Date(b.updated) - new Date(a.updated));
 
         sortedNotes.forEach(note => {
             const item = document.createElement('div');
             item.className = `note-list-item ${note.id === currentNoteId ? 'active' : ''}`;
             item.onclick = () => switchNote(note.id);
-            
+
             // 简单的日期格式化
             const dateStr = note.updated ? note.updated.split(' ')[0] : '刚刚';
 
@@ -1095,7 +1138,7 @@
                     <div class="note-item-date">${dateStr}</div>
                 </div>
             `;
-            
+
             // 只有管理员才能看到删除按钮
             if (userRole === 'admin') {
                 const delBtn = document.createElement('div');
@@ -1104,15 +1147,78 @@
                 delBtn.onclick = (e) => deleteNote(e, note.id);
                 item.appendChild(delBtn);
             }
-            
+
             listEl.appendChild(item);
         });
+    }
+
+    // 渲染分类列表（水平）
+    function renderCategoryList() {
+        const el = document.getElementById('categoryList');
+        if(!el) return;
+        el.innerHTML = '';
+
+        globalData.note_categories.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'playlist-btn';
+            btn.textContent = cat.name;
+            btn.style.whiteSpace = 'nowrap';
+            btn.onclick = () => switchCategory(cat.id);
+            if (cat.id === currentCategoryId) btn.classList.add('active');
+
+            // 管理员可删除分类
+            if (userRole === 'admin') {
+                const del = document.createElement('span');
+                del.style.marginLeft = '6px';
+                del.style.cursor = 'pointer';
+                del.textContent = '✕';
+                del.onclick = (e) => { e.stopPropagation(); deleteCategory(cat.id); };
+                btn.appendChild(del);
+            }
+
+            el.appendChild(btn);
+        });
+    }
+
+    function createNewCategory() {
+        if (userRole !== 'admin') { showPermissionWarning(); return; }
+        const name = prompt('请输入分类名称：', '新分类');
+        if (!name) return;
+        const cat = { id: Date.now(), name, notes: [] };
+        globalData.note_categories.push(cat);
+        currentCategoryId = cat.id;
+        saveData(); renderCategoryList(); renderNoteList();
+    }
+
+    function deleteCategory(id) {
+        if (userRole !== 'admin') { showPermissionWarning(); return; }
+        if (!confirm('删除该分类将同时删除其中的所有笔记，确认吗？')) return;
+        globalData.note_categories = globalData.note_categories.filter(c => c.id !== id);
+        if (currentCategoryId === id) currentCategoryId = globalData.note_categories.length ? globalData.note_categories[0].id : null;
+        saveData(); renderCategoryList(); renderNoteList();
+    }
+
+    function switchCategory(id) {
+        currentCategoryId = id;
+        renderCategoryList();
+        renderNoteList();
+        // 如果分类内有笔记则切换到第一条
+        const cat = globalData.note_categories.find(c => c.id === id);
+        if (cat && cat.notes && cat.notes.length>0) switchNote(cat.notes[0].id);
+        else createNewNote(false);
     }
 
     // 切换当前笔记
     function switchNote(id) {
         currentNoteId = id;
-        const note = globalData.notes.find(n => n.id === id);
+        // 在所有分类中查找笔记（优先分类），若未找到则查找平铺 notes
+        let note = null;
+        for (const cat of (globalData.note_categories || [])) {
+            const found = (cat.notes || []).find(n => n.id === id);
+            if (found) { note = found; break; }
+        }
+        if (!note) note = (globalData.notes || []).find(n => n.id === id);
+
         if (note) {
             document.getElementById('noteTitleInput').value = note.title;
             document.getElementById('noteContentInput').value = note.content;
@@ -1135,11 +1241,24 @@
             content: '',
             updated: new Date().toLocaleString()
         };
-        globalData.notes.unshift(newNote); // 加到最前面
+        // 如果选择了分类，则添加到当前分类；否则添加到平铺 notes
+        if (currentCategoryId) {
+            const cat = globalData.note_categories.find(c => c.id === currentCategoryId);
+            if (!cat) {
+                // 若分类不存在则新建
+                const newCat = { id: Date.now()+1, name: '默认', notes: [newNote] };
+                globalData.note_categories.push(newCat);
+                currentCategoryId = newCat.id;
+            } else {
+                cat.notes.unshift(newNote);
+            }
+        } else {
+            globalData.notes.unshift(newNote);
+        }
         if (autoSave) saveData();
-        
+
         switchNote(newNote.id);
-        renderNoteList();
+        renderCategoryList(); renderNoteList();
         // 自动聚焦标题
         document.getElementById('noteTitleInput').focus();
     }
@@ -1153,15 +1272,33 @@
         
         e.stopPropagation(); // 阻止触发切换
         if (confirm('确定删除这条笔记吗？')) {
-            globalData.notes = globalData.notes.filter(n => n.id !== id);
-            
-            // 如果删光了，自动补一个
-            if (globalData.notes.length === 0) {
+            // 从分类中删除（如果存在），否则从平铺 notes 删除
+            let removed = false;
+            for (const cat of (globalData.note_categories || [])) {
+                const before = cat.notes.length;
+                cat.notes = (cat.notes || []).filter(n => n.id !== id);
+                if (cat.notes.length !== before) removed = true;
+            }
+            if (!removed) {
+                globalData.notes = (globalData.notes || []).filter(n => n.id !== id);
+            }
+
+            // 找到当前所在分类的笔记集合，判断是否为空
+            let currentList = null;
+            if (currentCategoryId) {
+                const cat = globalData.note_categories.find(c => c.id === currentCategoryId);
+                if (cat) currentList = cat.notes;
+            } else {
+                currentList = globalData.notes;
+            }
+
+            // 如果删光了，自动补一个（在当前分类或平铺）
+            if (!currentList || currentList.length === 0) {
                 createNewNote();
             } else {
                 // 如果删的是当前正在看的，就切换到第一条
                 if (id === currentNoteId) {
-                    switchNote(globalData.notes[0].id);
+                    switchNote(currentList[0].id);
                 }
                 saveData();
                 renderNoteList();
@@ -1186,17 +1323,24 @@
         if (userRole !== 'admin') {
             return; // 普通用户不能编辑
         }
-        
-        const note = globalData.notes.find(n => n.id === currentNoteId);
+
+        // 在分类与平铺 notes 中查找当前笔记
+        let note = null;
+        for (const cat of (globalData.note_categories || [])) {
+            const found = (cat.notes || []).find(n => n.id === currentNoteId);
+            if (found) { note = found; break; }
+        }
+        if (!note) note = (globalData.notes || []).find(n => n.id === currentNoteId);
+
         if (note) {
             note.title = titleInput.value;
             note.content = contentInput.value;
             note.updated = new Date().toLocaleString();
-            
+
             // 更新界面上的时间和字数
             document.getElementById('noteUpdateTime').innerText = `更新于: 刚刚`;
             updateCharCount(note.content);
-            
+
             // 防抖保存到硬盘
             clearTimeout(window.saveTimer);
             window.saveTimer = setTimeout(() => {
