@@ -11,16 +11,9 @@ DATA_FILE = 'data.json'
 def load_data():
     """加载数据文件"""
     if not os.path.exists(DATA_FILE):
-        # 创建默认数据文件
+        # 创建默认数据文件（不硬编码用户信息）
         default_data = {
-            "users": [
-                {
-                    "username": "AllenCai1231",
-                    "password": "Allen20080813",
-                    "role": "admin",
-                    "created_at": "2026-02-07"
-                }
-            ],
+            "users": [],
             "notes": [],
             "software": [],
             "websites": []
