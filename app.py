@@ -5,7 +5,7 @@ from functools import wraps
 
 app = Flask(__name__)
 # 设置密钥用于会话加密
-app.secret_key = 'your-secret-key-here-please-change-in-production'
+app.secret_key = 'lkajsdflkjworiouweroiu13204982304sdljkdf'
 DATA_FILE = 'data.json'
 
 def load_data():
@@ -161,8 +161,21 @@ def open_app():
     target = request.json.get('path')
     if not target:
         return jsonify({"status": "error", "message": "路径为空"})
+    
+    # 安全检查：验证路径是否存在且在允许的目录内
     try:
-        os.startfile(target)
+        # 规范化路径，防止路径穿越
+        normalized_path = os.path.normpath(os.path.abspath(target))
+        base_dir = os.path.normpath(os.path.abspath(os.getcwd()))
+        
+        # 确保路径在项目目录内
+        if not normalized_path.startswith(base_dir):
+            return jsonify({"status": "error", "message": "禁止访问项目外的路径"}), 403
+        
+        if not os.path.exists(normalized_path):
+            return jsonify({"status": "error", "message": "路径不存在"}), 404
+        
+        os.startfile(normalized_path)
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
@@ -205,12 +218,22 @@ def get_music_playlists():
 @login_required
 def serve_music(relative_path):
     """提供音乐文件服务"""
-    # 从相对路径构建完整路径
-    music_path = os.path.join(os.getcwd(), 'Music', relative_path)
-    if os.path.exists(music_path):
-        return send_file(music_path)
-    else:
-        return jsonify({'error': 'File not found'}), 404
+    try:
+        # 构建基础目录
+        music_dir = os.path.abspath(os.path.join(os.getcwd(), 'Music'))
+        # 构建完整路径
+        music_path = os.path.abspath(os.path.join(music_dir, relative_path))
+        
+        # 安全检查：确保解析后的路径在Music目录内
+        if not music_path.startswith(music_dir):
+            return jsonify({'error': 'Access denied - path traversal detected'}), 403
+        
+        if os.path.exists(music_path) and os.path.isfile(music_path):
+            return send_file(music_path)
+        else:
+            return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': 'Invalid path'}), 400
 
 @app.route('/api/get_user_info', methods=['GET'])
 @login_required
