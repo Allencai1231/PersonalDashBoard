@@ -17,7 +17,8 @@ def load_data():
             "notes": [],
             "note_categories": [],
             "software": [],
-            "websites": []
+            "websites": [],
+            "allowed_paths": []
         }
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(default_data, f, ensure_ascii=False, indent=4)
@@ -27,7 +28,7 @@ def load_data():
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except:
-        return {"users": [], "notes": [], "note_categories": [], "software": [], "websites": []}
+        return {"users": [], "notes": [], "note_categories": [], "software": [], "websites": [], "allowed_paths": []}
 
 def save_data(data):
     """保存数据到文件"""
@@ -166,15 +167,7 @@ def open_app():
     try:
         # 规范化路径，防止路径穿越
         normalized_path = os.path.normpath(os.path.abspath(target))
-        base_dir = os.path.normpath(os.path.abspath(os.getcwd()))
-        
-        # 确保路径在项目目录内
-        if not normalized_path.startswith(base_dir):
-            return jsonify({"status": "error", "message": "禁止访问项目外的路径"}), 403
-        
-        if not os.path.exists(normalized_path):
-            return jsonify({"status": "error", "message": "路径不存在"}), 404
-        
+
         os.startfile(normalized_path)
         return jsonify({"status": "success"})
     except Exception as e:
