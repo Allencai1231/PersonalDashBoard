@@ -429,9 +429,191 @@
         }
 
         /* 左侧面板：导航区 */
-        .left-panel {
-            display: flex; flex-direction: column; gap: 2rem;
-            overflow-y: auto; padding-right: 10px;
+                  .left-panel {
+              display: flex; flex-direction: column; gap: 2rem;
+              overflow-y: auto; padding-right: 10px;
+          }
+  
+        /* 搜索框样式 */
+        .search-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .search-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        .tech-search-input {
+            width: 100%;
+            padding: 16px 60px 16px 24px;
+            background: rgba(15, 17, 26, 0.8);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            outline: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(15px);
+            box-shadow: var(--shadow-light);
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+        }
+        
+        .tech-search-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 230, 255, 0.25), var(--glow-intensity);
+            background: rgba(20, 22, 35, 0.9);
+        }
+        
+        .tech-search-input::placeholder {
+            color: var(--text-dim);
+            opacity: 0.8;
+        }
+        
+        .search-btn {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 230, 255, 0.15);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            font-size: 1.2rem;
+            cursor: pointer;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+        }
+        
+        .search-btn:hover {
+            background: var(--accent-cyan);
+            color: #000;
+            transform: translateY(-50%) scale(1.15);
+            box-shadow: var(--glow-intensity);
+        }
+        
+        .search-btn:active {
+            transform: translateY(-50%) scale(1.05);
+        }
+        
+        .search-btn i {
+            font-size: 1.3rem;
+        }
+        
+        /* 搜索框动画效果 */
+        @keyframes search-pulse {
+            0%, 100% { 
+                box-shadow: 0 0 0 0 rgba(0, 230, 255, 0.7); 
+            }
+            70% { 
+                box-shadow: 0 0 0 10px rgba(0, 230, 255, 0); 
+            }
+        }
+        
+        .tech-search-input:focus + .search-btn {
+            animation: search-pulse 2s infinite;
+        }
+        
+        /* 搜索建议框 */
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--card-glass);
+            backdrop-filter: blur(25px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            margin-top: 10px;
+            box-shadow: var(--shadow-medium), var(--glow-subtle);
+            z-index: 1000;
+            display: none;
+            overflow: hidden;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .search-suggestion-item {
+            padding: 14px 24px;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .search-suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .search-suggestion-item:hover {
+            background: rgba(0, 230, 255, 0.2);
+            color: var(--accent-cyan);
+            transform: translateX(5px);
+        }
+        
+        .search-suggestion-item .suggestion-text {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        .search-suggestion-item .suggestion-hint {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            opacity: 0.8;
+        }
+        
+        .search-suggestion-item:hover .suggestion-hint {
+            color: var(--accent-cyan);
+            opacity: 1;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 1200px) {
+            .tech-search-input {
+                padding: 14px 55px 14px 20px;
+                font-size: 1.05rem;
+            }
+            
+            .search-btn {
+                width: 38px;
+                height: 38px;
+                right: 12px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .search-section {
+                margin-bottom: 1rem;
+            }
+            
+            .tech-search-input {
+                padding: 12px 50px 12px 18px;
+                font-size: 1rem;
+                border-radius: 16px;
+            }
+            
+            .search-btn {
+                width: 36px;
+                height: 36px;
+                right: 10px;
+                font-size: 1.1rem;
+            }
+            
+            .search-suggestions {
+                border-radius: 12px;
+            }
+            
+            .search-suggestion-item {
+                padding: 12px 18px;
+            }
         }
 
         .header-section {
@@ -949,6 +1131,22 @@
 <div class="container">
     <!-- 左侧面板 -->
     <div class="left-panel">
+        <!-- 顶部搜索栏 -->
+        <div class="search-section">
+            <div class="search-container">
+                <input type="text" 
+                       class="tech-search-input" 
+                       id="googleSearchInput" 
+                       placeholder="输入搜索内容，按Enter或点击搜索..." 
+                       autocomplete="off">
+                <button class="search-btn" id="searchBtn" title="搜索">
+                    <i>🔍</i>
+                </button>
+                <div class="search-suggestions" id="searchSuggestions">
+                </div>
+            </div>
+        </div>
+
         <div class="header-section">
             <div class="time-box">
                 <h1 id="clock">00:00</h1>
@@ -2116,10 +2314,139 @@
 
     window.onload = () => {
         loadData();
-        initMusicPlayer();
-        initResize();
-        initNotebookSplitter();
-    };
-</script>
+                  initMusicPlayer();
+          initResize();
+          initNotebookSplitter();
+          initSearchFunctionality();
+      };
+  
+      // 搜索功能初始化
+      function initSearchFunctionality() {
+          const searchInput = document.getElementById('googleSearchInput');
+          const searchBtn = document.getElementById('searchBtn');
+          const searchSuggestions = document.getElementById('searchSuggestions');
+          
+          if (!searchInput || !searchBtn) return;
+          
+          // 执行Google搜索
+          function performGoogleSearch(query) {
+              if (!query || query.trim() === '') return;
+              
+              // 对搜索词进行URL编码
+              const encodedQuery = encodeURIComponent(query.trim());
+              // 跳转到Google搜索
+              window.open(`https://www.google.com/search?q=${encodedQuery}`, '_blank');
+              
+              // 清空输入框
+              searchInput.value = '';
+              // 隐藏建议框
+              searchSuggestions.style.display = 'none';
+          }
+          
+          // 搜索按钮点击事件
+          searchBtn.addEventListener('click', () => {
+              performGoogleSearch(searchInput.value);
+          });
+          
+          // 输入框回车事件
+          searchInput.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                  performGoogleSearch(searchInput.value);
+              }
+          });
+          
+          // 输入框聚焦事件 - 显示建议
+          searchInput.addEventListener('focus', () => {
+              if (searchInput.value.trim() === '') {
+                  searchSuggestions.style.display = 'block';
+              }
+          });
+          
+          // 输入框输入事件 - 动态显示建议
+          searchInput.addEventListener('input', () => {
+              const query = searchInput.value.trim();
+              if (query === '') {
+                  searchSuggestions.style.display = 'block';
+              } else {
+                  searchSuggestions.style.display = 'none';
+              }
+          });
+          
+          // 点击页面其他地方隐藏建议框
+          document.addEventListener('click', (e) => {
+              if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+                  searchSuggestions.style.display = 'none';
+              }
+          });
+          
+          // 建议项点击事件
+          const suggestionItems = searchSuggestions.querySelectorAll('.search-suggestion-item');
+          suggestionItems.forEach(item => {
+              item.addEventListener('click', () => {
+                  const searchText = item.getAttribute('data-search');
+                  searchInput.value = searchText;
+                  performGoogleSearch(searchText);
+              });
+          });
+          
+          // 输入框获得焦点时的视觉效果
+          searchInput.addEventListener('focus', () => {
+              searchInput.style.borderColor = 'var(--accent-cyan)';
+              searchInput.style.boxShadow = '0 0 0 3px rgba(0, 230, 255, 0.25), var(--glow-intensity)';
+          });
+          
+          searchInput.addEventListener('blur', () => {
+              searchInput.style.borderColor = 'var(--card-border)';
+              searchInput.style.boxShadow = 'var(--shadow-light)';
+          });
+          
+          // 添加一些科技感特效
+          let pulseInterval;
+          searchInput.addEventListener('focus', () => {
+              clearInterval(pulseInterval);
+              pulseInterval = setInterval(() => {
+                  searchBtn.style.transform = `translateY(-50%) scale(${1 + Math.random() * 0.1})`;
+              }, 300);
+          });
+          
+          searchInput.addEventListener('blur', () => {
+              clearInterval(pulseInterval);
+              searchBtn.style.transform = 'translateY(-50%)';
+          });
+          
+          // 添加搜索历史功能（可选）
+          const searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+          
+          function addToSearchHistory(query) {
+              if (!query || query.trim() === '') return;
+              
+              const trimmedQuery = query.trim();
+              // 移除重复项
+              const index = searchHistory.indexOf(trimmedQuery);
+              if (index > -1) {
+                  searchHistory.splice(index, 1);
+              }
+              
+              // 添加到开头
+              searchHistory.unshift(trimmedQuery);
+              
+              // 只保留最近10条
+              if (searchHistory.length > 10) {
+                  searchHistory.pop();
+              }
+              
+              localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+          }
+          
+          // 修改搜索函数以保存历史
+          const originalPerformSearch = performGoogleSearch;
+          performGoogleSearch = function(query) {
+              addToSearchHistory(query);
+              originalPerformSearch(query);
+          };
+          
+          console.log('搜索功能初始化完成 - 科技感搜索框已就绪');
+      }
+  </script>
 </body>
 </html>
