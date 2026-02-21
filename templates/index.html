@@ -2328,14 +2328,48 @@
           
           if (!searchInput || !searchBtn) return;
           
-          // 执行Google搜索
+          // 执行Google搜索或跳转网址
           function performGoogleSearch(query) {
               if (!query || query.trim() === '') return;
               
-              // 对搜索词进行URL编码
-              const encodedQuery = encodeURIComponent(query.trim());
-              // 跳转到Google搜索
-              window.open(`https://www.google.com/search?q=${encodedQuery}`, '_blank');
+              const trimmedQuery = query.trim();
+              
+              // 判断是否为网址
+              function isWebsite(input) {
+                  // 检查是否包含协议头
+                  if (input.startsWith('http://') || input.startsWith('https://')) {
+                      return true;
+                  }
+                  // 检查是否包含域名扩展名
+                  const domainPattern = /\.(com|cn|org|net|io|co|dev|app|info|shop|top|xyz|site|online|tech|web|tv|cc|us|uk|au|jp|de|fr|it|es|ru|kr|in|mx|br|ca|edu|gov|mil)+$/i;
+                  if (domainPattern.test(input)) {
+                      return true;
+                  }
+                  // 检查是否包含冒号（可能是本地地址如localhost:3000）
+                  if (input.includes(':') && !input.includes(' ')) {
+                      return true;
+                  }
+                  return false;
+              }
+              
+              let targetUrl;
+              
+              if (isWebsite(trimmedQuery)) {
+                  // 是网址：直接跳转
+                  // 如果没有协议头，添加https://
+                  if (!trimmedQuery.startsWith('http://') && !trimmedQuery.startsWith('https://')) {
+                      targetUrl = `https://${trimmedQuery}`;
+                  } else {
+                      targetUrl = trimmedQuery;
+                  }
+              } else {
+                  // 是搜索词：使用Google搜索
+                  const encodedQuery = encodeURIComponent(trimmedQuery);
+                  targetUrl = `https://www.google.com/search?q=${encodedQuery}`;
+              }
+              
+              // 跳转到目标URL
+              window.open(targetUrl, '_blank');
               
               // 清空输入框
               searchInput.value = '';
