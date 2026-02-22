@@ -534,8 +534,35 @@
             z-index: 1000;
             display: none;
             overflow: hidden;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
+        }
+        
+        .search-history-header {
+            padding: 12px 24px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .search-history-clear {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+        
+        .search-history-clear:hover {
+            color: var(--danger);
+            background: rgba(255, 77, 90, 0.15);
         }
         
         .search-suggestion-item {
@@ -547,6 +574,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
         }
         
         .search-suggestion-item:last-child {
@@ -562,17 +590,53 @@
         .search-suggestion-item .suggestion-text {
             font-size: 1rem;
             font-weight: 500;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .search-suggestion-item .suggestion-hint {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
-            opacity: 0.8;
+            opacity: 0.7;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .search-suggestion-item .suggestion-delete {
+            font-size: 1rem;
+            color: var(--text-dim);
+            opacity: 0.5;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .search-suggestion-item:hover .suggestion-delete {
+            color: var(--danger);
+            opacity: 1;
+            background: rgba(255, 77, 90, 0.15);
         }
         
         .search-suggestion-item:hover .suggestion-hint {
             color: var(--accent-cyan);
             opacity: 1;
+        }
+        
+        .search-empty-state {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+        
+        .search-empty-state i {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            opacity: 0.5;
         }
         
         /* 响应式调整 */
@@ -2328,6 +2392,147 @@
           
           if (!searchInput || !searchBtn) return;
           
+          // 搜索历史存储和管理
+          let searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+          
+          // 格式化时间显示
+          function formatTime(timestamp) {
+              if (!timestamp) return '';
+              const date = new Date(timestamp);
+              const now = new Date();
+              const diffMs = now - date;
+              const diffMins = Math.floor(diffMs / 60000);
+              const diffHours = Math.floor(diffMs / 3600000);
+              const diffDays = Math.floor(diffMs / 86400000);
+              
+              if (diffMins < 1) return '刚刚';
+              if (diffMins < 60) return `${diffMins}分钟前`;
+              if (diffHours < 24) return `${diffHours}小时前`;
+              if (diffDays < 7) return `${diffDays}天前`;
+              
+              return date.toLocaleDateString('zh-CN');
+          }
+          
+          // 渲染搜索历史
+          function renderSearchHistory() {
+              if (searchHistory.length === 0) {
+                  searchSuggestions.innerHTML = '<div class="search-empty-state">还没有搜索历史呢 🚀</div>';
+                  return;
+              }
+              
+              let html = '<div class="search-history-header">' +
+                  '<span>搜索历史</span>' +
+                  '<span class="search-history-clear" title="清除所有历史">清空</span>' +
+                  '</div>';
+              
+              searchHistory.forEach((item, index) => {
+                  const timestamp = typeof item === 'string' ? null : item.timestamp;
+                  const text = typeof item === 'string' ? item : item.text;
+                  const timeStr = formatTime(timestamp);
+                  
+                  html += `<div class="search-suggestion-item" data-index="${index}" onclick="event.stopPropagation();">
+                      <span class="suggestion-text item-search" style="flex:1; cursor:pointer;">${escapeHtml(text)}</span>
+                      <span class="suggestion-hint">${timeStr}</span>
+                      <span class="suggestion-delete" title="删除">✕</span>
+                  </div>`;
+              });
+              
+              searchSuggestions.innerHTML = html;
+              
+              // 为渲染的元素绑定事件
+              attachHistoryEventListeners();
+          }
+          
+          // 为搜索历史元素绑定事件
+          function attachHistoryEventListeners() {
+              const items = searchSuggestions.querySelectorAll('.search-suggestion-item');
+              
+              items.forEach((item, itemIndex) => {
+                  // 点击搜索文本 - 执行搜索
+                  const searchText = item.querySelector('.item-search');
+                  if (searchText) {
+                      searchText.addEventListener('click', (e) => {
+                          e.stopPropagation();
+                          const index = parseInt(item.getAttribute('data-index'));
+                          if (index >= 0 && index < searchHistory.length) {
+                              const searchItem = searchHistory[index];
+                              const text = typeof searchItem === 'string' ? searchItem : searchItem.text;
+                              searchInput.value = text;
+                              performGoogleSearch(text);
+                          }
+                      });
+                  }
+                  
+                  // 删除按钮点击
+                  const deleteBtn = item.querySelector('.suggestion-delete');
+                  if (deleteBtn) {
+                      deleteBtn.addEventListener('click', (e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          const index = parseInt(item.getAttribute('data-index'));
+                          if (!isNaN(index) && index >= 0 && index < searchHistory.length) {
+                              if (confirm('确定要删除这条搜索历史吗？')) {
+                                  searchHistory.splice(index, 1);
+                                  localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+                                  renderSearchHistory();
+                              }
+                          }
+                      });
+                  }
+              });
+              
+              // 清空按钮事件
+              const clearBtn = searchSuggestions.querySelector('.search-history-clear');
+              if (clearBtn) {
+                  clearBtn.addEventListener('click', (e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (confirm('确定要清除所有搜索历史吗？')) {
+                          searchHistory = [];
+                          localStorage.setItem('searchHistory', '[]');
+                          renderSearchHistory();
+                      }
+                  });
+              }
+          }
+          
+          // 转义HTML特殊字符
+          function escapeHtml(text) {
+              const map = {
+                  '&': '&amp;',
+                  '<': '&lt;',
+                  '>': '&gt;',
+                  '"': '&quot;',
+                  "'": '&#039;'
+              };
+              return text.replace(/[&<>"']/g, m => map[m]);
+          }
+          
+          // 添加到搜索历史（带时间戳）
+          function addToSearchHistory(query) {
+              if (!query || query.trim() === '') return;
+              
+              const trimmedQuery = query.trim();
+              // 移除重复项（比较搜索文本）
+              searchHistory = searchHistory.filter(item => {
+                  const text = typeof item === 'string' ? item : item.text;
+                  return text !== trimmedQuery;
+              });
+              
+              // 添加新项到开头（带时间戳）
+              searchHistory.unshift({
+                  text: trimmedQuery,
+                  timestamp: new Date().getTime()
+              });
+              
+              // 只保留最近30条
+              if (searchHistory.length > 30) {
+                  searchHistory = searchHistory.slice(0, 30);
+              }
+              
+              localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+          }
+          
           // 执行Google搜索或跳转网址
           function performGoogleSearch(query) {
               if (!query || query.trim() === '') return;
@@ -2368,6 +2573,9 @@
                   targetUrl = `https://www.google.com/search?q=${encodedQuery}`;
               }
               
+              // 添加到搜索历史
+              addToSearchHistory(trimmedQuery);
+              
               // 跳转到目标URL
               window.open(targetUrl, '_blank');
               
@@ -2389,17 +2597,19 @@
               }
           });
           
-          // 输入框聚焦事件 - 显示建议
+          // 输入框聚焦事件 - 显示历史
           searchInput.addEventListener('focus', () => {
               if (searchInput.value.trim() === '') {
+                  renderSearchHistory();
                   searchSuggestions.style.display = 'block';
               }
           });
           
-          // 输入框输入事件 - 动态显示建议
+          // 输入框输入事件
           searchInput.addEventListener('input', () => {
               const query = searchInput.value.trim();
               if (query === '') {
+                  renderSearchHistory();
                   searchSuggestions.style.display = 'block';
               } else {
                   searchSuggestions.style.display = 'none';
@@ -2411,16 +2621,6 @@
               if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
                   searchSuggestions.style.display = 'none';
               }
-          });
-          
-          // 建议项点击事件
-          const suggestionItems = searchSuggestions.querySelectorAll('.search-suggestion-item');
-          suggestionItems.forEach(item => {
-              item.addEventListener('click', () => {
-                  const searchText = item.getAttribute('data-search');
-                  searchInput.value = searchText;
-                  performGoogleSearch(searchText);
-              });
           });
           
           // 输入框获得焦点时的视觉效果
@@ -2447,37 +2647,6 @@
               clearInterval(pulseInterval);
               searchBtn.style.transform = 'translateY(-50%)';
           });
-          
-          // 添加搜索历史功能（可选）
-          const searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-          
-          function addToSearchHistory(query) {
-              if (!query || query.trim() === '') return;
-              
-              const trimmedQuery = query.trim();
-              // 移除重复项
-              const index = searchHistory.indexOf(trimmedQuery);
-              if (index > -1) {
-                  searchHistory.splice(index, 1);
-              }
-              
-              // 添加到开头
-              searchHistory.unshift(trimmedQuery);
-              
-              // 只保留最近10条
-              if (searchHistory.length > 10) {
-                  searchHistory.pop();
-              }
-              
-              localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
-          }
-          
-          // 修改搜索函数以保存历史
-          const originalPerformSearch = performGoogleSearch;
-          performGoogleSearch = function(query) {
-              addToSearchHistory(query);
-              originalPerformSearch(query);
-          };
           
           console.log('搜索功能初始化完成 - 科技感搜索框已就绪');
       }
