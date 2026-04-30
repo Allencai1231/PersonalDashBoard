@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import { motion } from "framer-motion";
 import { useAppContext } from "@/App";
 import { useDashboardData } from "@/hooks/useApi";
@@ -8,7 +8,9 @@ import Header from "./Header";
 import SearchBar from "./SearchBar";
 import NavGrid from "./NavGrid";
 import Notebook from "./Notebook";
-import MusicPlayer from "./MusicPlayer";
+
+// Lazy load MusicPlayer to avoid blocking Dashboard load with music playlist scan
+const MusicPlayer = lazy(() => import("./MusicPlayer"));
 
 export default function Dashboard() {
   const { setDashboardData, dashboardData } = useAppContext();
@@ -326,8 +328,10 @@ export default function Dashboard() {
         <Notebook />
       </motion.div>
 
-      {/* ---- Music Player (always rendered, self-manages visibility) ---- */}
-      <MusicPlayer />
+      {/* ---- Music Player (lazy-loaded to avoid blocking dashboard load) ---- */}
+      <Suspense fallback={null}>
+        <MusicPlayer />
+      </Suspense>
     </div>
   );
 }

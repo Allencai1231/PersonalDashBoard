@@ -9,20 +9,34 @@ use crate::middleware::{self, SharedState};
 use crate::models::{ApiResponse, OpenAppRequest};
 
 // GET /api/get_data
-pub async fn get_data() -> impl IntoResponse {
-    eprintln!("[DEBUG] get_data handler called - loading data.json...");
+pub async fn get_data(State(state): State<SharedState>) -> impl IntoResponse {
+    eprintln!("[DEBUG] get_data handler called");
+
+    // Try to get cached dashboard data
+    if let Some(cached) = state.data_cache.get() {
+        eprintln!("[DEBUG] get_data: cache HIT - returning cached data");
+        let response = Json(ApiResponse::success_data(cached));
+        return response.into_response();
+    }
+
+    eprintln!("[DEBUG] get_data: cache MISS - loading data.json from disk");
     let mut data = crate::models::load_data();
     eprintln!(
-        "[DEBUG] get_data loaded: {} users, {} notes, {} software, {} websites",
-        data.users.len(),
+        "[DEBUG] get_data loaded: {} notes, {} software, {} websites",
         data.notes.len(),
         data.software.len(),
         data.websites.len()
     );
+
+    // Clear sensitive user data before sending to client
     data.users.clear();
+
+    // Store in cache
+    state.data_cache.set(data.clone());
+
     let response = Json(ApiResponse::success_data(data));
     eprintln!("[DEBUG] get_data handler - returning response");
-    response
+    response.into_response()
 }
 
 // POST /api/save_data
@@ -75,7 +89,12 @@ pub async fn save_data(
     current.users = users;
 
     match crate::models::save_data(&current) {
-        Ok(()) => (StatusCode::OK, Json(ApiResponse::success())).into_response(),
+        Ok(()) => {
+            eprintln!("[DEBUG] save_data: data saved successfully, invalidating cache");
+            // Invalidate cache so next request reloads from disk
+            state.data_cache.invalidate();
+            (StatusCode::OK, Json(ApiResponse::success())).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::error(format!("保存失败: {e}"))),
