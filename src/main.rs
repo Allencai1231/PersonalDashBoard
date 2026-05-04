@@ -3,7 +3,11 @@ mod middleware;
 mod models;
 
 use axum::{
-    extract::Request, middleware::Next, response::Response, routing::get, routing::post, Router,
+    extract::{DefaultBodyLimit, Request},
+    middleware::Next,
+    response::Response,
+    routing::{get, post},
+    Router,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -64,6 +68,10 @@ async fn main() {
         // ─── SPA fallback — unmatched GET → index.html ───────────────────
         .fallback_service(ServeDir::new("static/dist"))
         // ─── Middleware ──────────────────────────────────────────────────
+        // Axum's default JSON/body limit is 2 MiB. Notes are saved as a single
+        // dashboard JSON payload, so larger notebooks can exceed that and get
+        // rejected with `413 Payload Too Large` before the handler runs.
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         .layer(axum::middleware::from_fn(request_logger))
         .layer(CorsLayer::permissive())
         .with_state(state);
