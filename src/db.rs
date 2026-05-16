@@ -24,8 +24,7 @@ pub async fn init_pool() -> Result<SqlitePool, sqlx::Error> {
     let opts = SqliteConnectOptions::from_str(DB_URL)?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .foreign_keys(true);
+        .synchronous(SqliteSynchronous::Normal);
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -53,7 +52,8 @@ async fn init_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS note_categories (
-            id   TEXT PRIMARY KEY,
+            pk   INTEGER PRIMARY KEY AUTOINCREMENT,
+            id   TEXT NOT NULL,
             name TEXT NOT NULL,
             sort INTEGER NOT NULL DEFAULT 0
         );
@@ -62,16 +62,20 @@ async fn init_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_categories_id ON note_categories(id);")
+        .execute(pool)
+        .await?;
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS notes (
-            id          TEXT PRIMARY KEY,
+            pk          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          TEXT NOT NULL,
             category_id TEXT,
             title       TEXT NOT NULL,
             content     TEXT NOT NULL,
             updated     TEXT NOT NULL,
-            sort        INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY(category_id) REFERENCES note_categories(id) ON DELETE CASCADE
+            sort        INTEGER NOT NULL DEFAULT 0
         );
         "#,
     )
@@ -79,6 +83,9 @@ async fn init_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .await?;
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category_id);")
+        .execute(pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_notes_id ON notes(id);")
         .execute(pool)
         .await?;
 
@@ -277,7 +284,7 @@ pub async fn load_dashboard(pool: &SqlitePool) -> Result<DashboardData, sqlx::Er
 
     // top-level notes
     let top_notes: Vec<Note> = sqlx::query(
-        "SELECT id, title, content, updated FROM notes WHERE category_id IS NULL ORDER BY sort ASC, id ASC",
+        "SELECT id, title, content, updated FROM notes WHERE category_id IS NULL ORDER BY sort ASC, pk ASC",
     )
     .fetch_all(pool)
     .await?
@@ -291,7 +298,7 @@ pub async fn load_dashboard(pool: &SqlitePool) -> Result<DashboardData, sqlx::Er
     .collect();
 
     // categories
-    let cat_rows = sqlx::query("SELECT id, name FROM note_categories ORDER BY sort ASC, id ASC")
+    let cat_rows = sqlx::query("SELECT id, name FROM note_categories ORDER BY sort ASC, pk ASC")
         .fetch_all(pool)
         .await?;
 
@@ -301,7 +308,7 @@ pub async fn load_dashboard(pool: &SqlitePool) -> Result<DashboardData, sqlx::Er
         let name: String = r.get("name");
 
         let notes: Vec<Note> = sqlx::query(
-            "SELECT id, title, content, updated FROM notes WHERE category_id = ? ORDER BY sort ASC, id ASC",
+            "SELECT id, title, content, updated FROM notes WHERE category_id = ? ORDER BY sort ASC, pk ASC",
         )
         .bind(&cid)
         .fetch_all(pool)

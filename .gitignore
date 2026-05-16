@@ -2,7 +2,6 @@ Music/
 frontend/node_modules/
 target/
 static/dist
-data.json
 data.json.migrated-*.bak
 data.db
 data.db-journal

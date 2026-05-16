@@ -12,7 +12,10 @@ use axum::{
 };
 use std::sync::Arc;
 use std::time::Instant;
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::{
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+};
 
 use middleware::AppState;
 
@@ -63,9 +66,9 @@ async fn main() {
 
     let app = Router::new()
         // ─── Auth routes ─────────────────────────────────────────────────
-        .route("/login", post(handlers::auth::login))
-        .route("/register", post(handlers::auth::register))
-        .route("/logout", get(handlers::auth::logout))
+        .route("/api/login", post(handlers::auth::login))
+        .route("/api/register", post(handlers::auth::register))
+        .route("/api/logout", get(handlers::auth::logout))
         // ─── API routes ──────────────────────────────────────────────────
         .route("/api/get_data", get(handlers::data::get_data))
         .route("/api/save_data", post(handlers::data::save_data))
@@ -76,11 +79,15 @@ async fn main() {
         )
         .route("/api/get_user_info", get(handlers::auth::get_user_info))
         .route("/music/*path", get(handlers::music::serve_music))
-        // ─── Static files — React build output ───────────────────────────
+        // ─── Static files — React build output ───────────────────────
         .nest_service("/assets", ServeDir::new("static/dist/assets"))
         .nest_service("/static", ServeDir::new("static"))
-        // ─── SPA fallback — unmatched GET → index.html ───────────────────
-        .fallback_service(ServeDir::new("static/dist"))
+        // ─── SPA fallback — unmatched GET serves the SPA's index.html so
+        //     React Router can handle the path on the client (e.g. /login).
+        .fallback_service(
+            ServeDir::new("static/dist")
+                .not_found_service(ServeFile::new("static/dist/index.html")),
+        )
         // ─── Middleware ──────────────────────────────────────────────────
         // Axum's default JSON/body limit is 2 MiB. Notes are saved as a single
         // dashboard JSON payload, so larger notebooks can exceed that and get
