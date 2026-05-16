@@ -1,3 +1,4 @@
+mod db;
 mod handlers;
 mod middleware;
 mod models;
@@ -45,7 +46,20 @@ async fn main() {
         .try_init()
         .ok(); // ignore if already initialized
 
-    let state = Arc::new(AppState::new());
+    // ─── Initialize SQLite pool & migrate legacy data.json (one-shot) ─
+    let pool = match db::init_pool().await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[FATAL] could not open database: {e}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = db::migrate_from_json_if_needed(&pool).await {
+        eprintln!("[FATAL] migration from data.json failed: {e}");
+        std::process::exit(1);
+    }
+
+    let state = Arc::new(AppState::new(pool));
 
     let app = Router::new()
         // ─── Auth routes ─────────────────────────────────────────────────

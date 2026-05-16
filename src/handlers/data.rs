@@ -5,8 +5,9 @@ use axum::{
     Json,
 };
 
+use crate::db::{self, SavePayload};
 use crate::middleware::{self, SharedState};
-use crate::models::{ApiResponse, OpenAppRequest};
+use crate::models::{ApiResponse, NavItem, Note, NoteCategory, OpenAppRequest};
 
 // GET /api/get_data
 pub async fn get_data(State(state): State<SharedState>) -> impl IntoResponse {
@@ -19,11 +20,22 @@ pub async fn get_data(State(state): State<SharedState>) -> impl IntoResponse {
         return response.into_response();
     }
 
-    eprintln!("[DEBUG] get_data: cache MISS - loading data.json from disk");
-    let mut data = crate::models::load_data();
+    eprintln!("[DEBUG] get_data: cache MISS - loading from database");
+    let mut data = match db::load_dashboard(&state.pool).await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("[ERROR] get_data: db load failed: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error(format!("读取失败: {e}"))),
+            )
+                .into_response();
+        }
+    };
     eprintln!(
-        "[DEBUG] get_data loaded: {} notes, {} software, {} websites",
+        "[DEBUG] get_data loaded: {} notes, {} categories, {} software, {} websites",
         data.notes.len(),
+        data.note_categories.len(),
         data.software.len(),
         data.websites.len()
     );
@@ -60,38 +72,48 @@ pub async fn save_data(
         _ => {}
     }
 
-    let mut current = crate::models::load_data();
-    let users = std::mem::take(&mut current.users);
+    // Decode whichever sections are present in the request body. Sections
+    // that are missing or fail to decode are simply skipped, matching the
+    // previous JSON-file behavior.
+    let mut notes: Option<Vec<Note>> = None;
+    let mut note_categories: Option<Vec<NoteCategory>> = None;
+    let mut software: Option<Vec<NavItem>> = None;
+    let mut websites: Option<Vec<NavItem>> = None;
 
     if let Some(obj) = body.as_object() {
         if let Some(val) = obj.get("notes") {
-            if let Ok(v) = serde_json::from_value(val.clone()) {
-                current.notes = v;
+            if let Ok(v) = serde_json::from_value::<Vec<Note>>(val.clone()) {
+                notes = Some(v);
             }
         }
         if let Some(val) = obj.get("note_categories") {
-            if let Ok(v) = serde_json::from_value(val.clone()) {
-                current.note_categories = v;
+            if let Ok(v) = serde_json::from_value::<Vec<NoteCategory>>(val.clone()) {
+                note_categories = Some(v);
             }
         }
         if let Some(val) = obj.get("software") {
-            if let Ok(v) = serde_json::from_value(val.clone()) {
-                current.software = v;
+            if let Ok(v) = serde_json::from_value::<Vec<NavItem>>(val.clone()) {
+                software = Some(v);
             }
         }
         if let Some(val) = obj.get("websites") {
-            if let Ok(v) = serde_json::from_value(val.clone()) {
-                current.websites = v;
+            if let Ok(v) = serde_json::from_value::<Vec<NavItem>>(val.clone()) {
+                websites = Some(v);
             }
         }
     }
 
-    current.users = users;
+    let payload = SavePayload {
+        notes: notes.as_deref(),
+        note_categories: note_categories.as_deref(),
+        software: software.as_deref(),
+        websites: websites.as_deref(),
+    };
 
-    match crate::models::save_data(&current) {
+    match db::save_dashboard(&state.pool, payload).await {
         Ok(()) => {
             eprintln!("[DEBUG] save_data: data saved successfully, invalidating cache");
-            // Invalidate cache so next request reloads from disk
+            // Invalidate cache so next request reloads from db
             state.data_cache.invalidate();
             (StatusCode::OK, Json(ApiResponse::success())).into_response()
         }

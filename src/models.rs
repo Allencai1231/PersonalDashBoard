@@ -1,9 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io;
-use std::path::Path;
-
-const DATA_FILE: &str = "data.json";
 
 // ─── Top-level data container ────────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,69 +149,4 @@ impl ApiResponse {
     }
 }
 
-// ─── Data loading / saving ───────────────────────────────────────────────────
-pub fn load_data() -> DashboardData {
-    if !Path::new(DATA_FILE).exists() {
-        let default = DashboardData {
-            users: vec![],
-            notes: vec![],
-            note_categories: vec![],
-            software: vec![],
-            websites: vec![],
-        };
-        if let Err(e) = save_data(&default) {
-            eprintln!("Warning: could not create default data.json: {e}");
-        }
-        return default;
-    }
-
-    match fs::read_to_string(DATA_FILE) {
-        Ok(contents) => match serde_json::from_str(&contents) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("Warning: corrupt data.json ({e}), using defaults");
-                DashboardData {
-                    users: vec![],
-                    notes: vec![],
-                    note_categories: vec![],
-                    software: vec![],
-                    websites: vec![],
-                }
-            }
-        },
-        Err(e) => {
-            eprintln!("Warning: cannot read data.json ({e}), using defaults");
-            DashboardData {
-                users: vec![],
-                notes: vec![],
-                note_categories: vec![],
-                software: vec![],
-                websites: vec![],
-            }
-        }
-    }
-}
-
-pub fn save_data(data: &DashboardData) -> io::Result<()> {
-    let json = serde_json::to_string_pretty(data)?;
-    fs::write(DATA_FILE, json)?;
-    Ok(())
-}
-
-// ─── User helpers ────────────────────────────────────────────────────────────
-pub fn get_user_by_username(users: &[User], username: &str) -> Option<User> {
-    users.iter().find(|u| u.username == username).cloned()
-}
-
-pub fn add_user(data: &mut DashboardData, username: &str, password: &str, role: &str) -> bool {
-    if data.users.iter().any(|u| u.username == username) {
-        return false;
-    }
-    data.users.push(User {
-        username: username.into(),
-        password: password.into(),
-        role: role.into(),
-        created_at: chrono::Local::now().format("%Y-%m-%d").to_string(),
-    });
-    true
-}
+// Storage I/O lives in `crate::db` (SQLite-backed).

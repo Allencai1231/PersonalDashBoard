@@ -1,9 +1,10 @@
 use axum::http::HeaderMap;
+use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::models::{UserInfo, Playlist, DashboardData};
+use crate::models::{DashboardData, Playlist, UserInfo};
 
 // ─── Session data ────────────────────────────────────────────────────────────
 
@@ -173,14 +174,16 @@ pub struct AppState {
     pub sessions: SessionStore,
     pub music_cache: MusicCacheStore,
     pub data_cache: DataCacheStore,
+    pub pool: SqlitePool,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self {
             sessions: SessionStore::new(),
             music_cache: MusicCacheStore::new(),
             data_cache: DataCacheStore::new(),
+            pool,
         }
     }
 }
