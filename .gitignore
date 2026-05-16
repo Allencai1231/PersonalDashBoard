@@ -2,3 +2,4 @@ Music/
 frontend/node_modules/
 target/
 static/dist
+data.json
